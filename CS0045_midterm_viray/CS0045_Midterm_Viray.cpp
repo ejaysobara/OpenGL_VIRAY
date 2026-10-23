@@ -1,56 +1,4 @@
-/*==============================================================================
-  PLEASE INSERT COIN
-  CS0045 midterm - C++ / OpenGL (compatibility profile) / FreeGLUT mini-game
 
-  BUILD (same flags as the course "Build OpenGL Program" VS Code task):
-      g++ PLEASE_INSERT_COIN.cpp -o PLEASE_INSERT_COIN.exe -lfreeglut -lopengl32 -lglu32
-
-  WHAT IT IS
-      A routine 2D snack purchase on a quiet night street suddenly becomes a
-      3D rescue: you operate a maintenance claw inside the vending machine to
-      recover the jammed snack. Three customers make increasingly odd requests.
-      Nothing in the game text explains them; the last thing you see is a
-      reflection in the glass.
-
-  CONTROLS
-      Mouse : click COIN SLOT, click the requested snack button, click the
-              delivered snack to collect it, click menu options.
-      Keys  : W A S D / arrow keys  move claw (X = left/right, Z = depth)
-              SPACE                 lower claw to grab / release carried snack
-              P or ESC              pause (rescue only)
-              ENTER                 confirm / continue / collect
-              R                     retry (only on the RECOVERY UNSUCCESSFUL screen)
-
-  FILE LAYOUT (each section opens with a comment block explaining how it works)
-      1. INCLUDES, CONSTANTS AND PALETTE
-      2. AUTHORITATIVE DATA (enums, structs, the three stage records)
-      3. COORDINATE, LAYOUT AND HIT-TEST HELPERS
-      4. GAMEPLAY LOGIC AND COLLISION DETECTION
-      5. SHARED RETRO PRESENTATION (primitives, text, GL pass setup, vertex arrays)
-      6. 2D ENVIRONMENT AND CHARACTER RENDERING
-      7. 3D ENVIRONMENT AND CLAW RENDERING
-      8. HUD, MENUS AND TRANSITION RENDERING
-      9. GLUT CALLBACKS AND TIMING
-     10. main
-==============================================================================*/
-
-
-/*==============================================================================
-  1. INCLUDES, CONSTANTS AND PALETTE
-
-  HOW IT WORKS
-      Everything tunable lives here as a named constant so gameplay numbers can
-      be changed in one place (START_ATTEMPTS, tolerances, speeds, durations).
-      Two coordinate spaces are used:
-        * 2D "logical" space: 320 x 180 units, origin bottom-left. Street,
-          machine, menus and all hit-test rectangles share it.
-        * 3D machine-interior space: X = width, Y = height, Z = depth
-          (larger Z = deeper into the machine, away from the camera).
-      Gameplay (collision, speed, tolerance, chute) uses 3D world units only;
-      window size and pixel scale never change gameplay.
-      The palette is shared: warm amber/cream for the street and machine,
-      cool blue-green for the interior with warm accents on the chute.
-==============================================================================*/
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -141,20 +89,6 @@ static float lerpf(float a, float b, float t) { return a + (b - a) * t; }
 static float smooth01(float t) { t = clampf(t, 0.0f, 1.0f); return t * t * (3.0f - 2.0f * t); }
 
 
-/*==============================================================================
-  2. AUTHORITATIVE DATA
-
-  HOW IT WORKS
-      Exactly one top-level GameState is active; a pause/help/confirm overlay
-      is a separate Overlay value so the paused rescue substate is preserved.
-      The claw has its own ClawState. Small structs own related values:
-        GameData  - state, stage, attempts, purchase and result flags
-        ClawData  - position, held keys, substate, carry flag, drop outcome
-        StageData - three fixed records (target, layout, dialogue, colours)
-        Clocks    - scene/cue/outro timers (presentation only)
-      Renderers only READ these; the helpers in section 4 and the input
-      callbacks in section 9 are the only code that changes them.
-==============================================================================*/
 enum GameState { TITLE, CUSTOMER_INTRO, MACHINE_2D, TRANSITION_TO_3D, RESCUE_3D,
                  TRANSITION_TO_2D, STAGE_RESULT, GAME_OVER, REFLECTION_OUTRO };
 enum ClawState { IDLE_EMPTY, DESCENDING, ASCENDING_EMPTY, ASCENDING_WITH_SNACK,
@@ -264,7 +198,7 @@ static float gAccum = 0.0f;
 
 
 /*==============================================================================
-  3. COORDINATE, LAYOUT AND HIT-TEST HELPERS
+  COORDINATE, LAYOUT AND HIT-TEST HELPERS
 
   HOW IT WORKS
       The window may be any size, but the picture is always a 16:9 content
@@ -333,7 +267,7 @@ static const char* PAUSE_LABEL[4] = { "RESUME", "REINITIALIZE (RESTART STAGE)", 
 
 
 /*==============================================================================
-  4. GAMEPLAY LOGIC AND COLLISION DETECTION
+  GAMEPLAY LOGIC AND COLLISION DETECTION
 
   HOW IT WORKS
       * State changes go through transitionTo(), which initialises each
@@ -666,7 +600,7 @@ static float outroFlicker() {
 
 
 /*==============================================================================
-  5. SHARED RETRO PRESENTATION
+  SHARED RETRO PRESENTATION
 
   HOW IT WORKS
       * Small helpers (rect, triangle fan, text) used by every scene.
@@ -875,7 +809,7 @@ static void drawCuboid(float cx, float cy, float cz, float sx, float sy, float s
 
 
 /*==============================================================================
-  6. 2D ENVIRONMENT AND CHARACTER RENDERING
+  2D ENVIRONMENT AND CHARACTER RENDERING
 
   HOW IT WORKS
       Everything is drawn back-to-front in logical 320x180 space: sky, stars,
@@ -1135,7 +1069,7 @@ static void drawReflectionForState() {
 
 
 /*==============================================================================
-  7. 3D ENVIRONMENT AND CLAW RENDERING
+  3D ENVIRONMENT AND CLAW RENDERING
 
   HOW IT WORKS
       The interior is built from the indexed cuboid mesh (section 5) plus
@@ -1350,7 +1284,7 @@ static void drawScene3D() {
 
 
 /*==============================================================================
-  8. HUD, MENUS AND TRANSITION RENDERING
+  HUD, MENUS AND TRANSITION RENDERING
 
   HOW IT WORKS
       The interface belongs to the world: a commercial-looking vending display
@@ -1595,25 +1529,6 @@ static void drawWarningBorder(float a) {
     fillRect(0, 0, LW, 3); fillRect(0, LH - 3, LW, LH); fillRect(0, 0, 3, LH); fillRect(LW - 3, 0, LW, LH);
 }
 
-
-/*==============================================================================
-  9. GLUT CALLBACKS AND TIMING
-
-  HOW IT WORKS
-      * display(): picks the scene for the current state, draws that state's
-        HUD, then any overlay. It never changes game state.
-      * timerUpdate(): the ONE update chain. It reads GLUT_ELAPSED_TIME, clamps
-        the delta, advances presentation clocks, and runs gameplay in fixed
-        10 ms steps (bounded catch-up) only during an un-paused rescue.
-        Pausing therefore freezes claw, snack and arm; resuming zeroes the
-        accumulator so there is no jump.
-      * Input callbacks are thin adapters: they normalise the event
-        (key-repeat is disabled so every key-down is a fresh press), check the
-        current state/overlay, then call one named action helper. Dispatch
-        order: overlay first, then the active state's actions.
-      * Mouse: left-button-down, converted to logical coordinates (letterbox
-        rejected) then hit-tested against the shared Rects.
-==============================================================================*/
 static void display() {
     glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, gWinW < 1 ? 1 : gWinW, gWinH < 1 ? 1 : gWinH);
@@ -1940,14 +1855,6 @@ static void passiveMotion(int mx, int my) {
 static void visibilityFunc(int v) { if (v != GLUT_VISIBLE) clearHeldKeys(); }
 
 
-/*==============================================================================
-  10. main
-
-  HOW IT WORKS
-      Initialise GLUT once (double buffer, RGB, depth), create the window,
-      build the static vertex data, reset the game to the title, register all
-      callbacks and start the single timer chain, then enter glutMainLoop.
-==============================================================================*/
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
